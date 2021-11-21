@@ -148,13 +148,6 @@ network_out(inet_faure *src, bool is_cidr)
                     (errcode(ERRCODE_INVALID_BINARY_REPRESENTATION),
                     errmsg("could not format inet value: %m")));
 
-        /* For CIDR, add /n if not present */
-        if (is_cidr && strchr(tmp, '/') == NULL)
-        {
-            len = strlen(tmp);
-            snprintf(tmp + len, sizeof(tmp) - len, "/%u", ip_bits(src));
-        }
-
         return pstrdup(tmp);
     }
 }
@@ -222,17 +215,6 @@ inet_faure_out(PG_FUNCTION_ARGS)
 // 	for (i = 0; i < nb; i++)
 // 		addrptr[i] = pq_getmsgbyte(buf);
 
-// 	/*
-// 	 * Error check: CIDR values must not have any bits set beyond the masklen.
-// 	 */
-// 	if (is_cidr)
-// 	{
-// 		if (!addressOK(ip_addr(addr), bits, ip_family(addr)))
-// 			ereport(ERROR,
-// 					(errcode(ERRCODE_INVALID_BINARY_REPRESENTATION),
-// 					 errmsg("invalid external \"cidr\" value"),
-// 					 errdetail("Value has bits set to right of mask.")));
-// 	}
 
 // 	SET_INET_VARSIZE(addr);
 
@@ -247,13 +229,6 @@ inet_faure_out(PG_FUNCTION_ARGS)
 // 	PG_RETURN_INET_P(network_recv(buf, false));
 // }
 
-// Datum
-// cidr_recv(PG_FUNCTION_ARGS)
-// {
-// 	StringInfo	buf = (StringInfo) PG_GETARG_POINTER(0);
-
-// 	PG_RETURN_INET_P(network_recv(buf, true));
-// }
 
 
 // /*
@@ -289,29 +264,6 @@ inet_faure_out(PG_FUNCTION_ARGS)
 // 	PG_RETURN_BYTEA_P(network_send(addr, false));
 // }
 
-// Datum
-// cidr_send(PG_FUNCTION_ARGS)
-// {
-// 	inet	   *addr = PG_GETARG_INET_PP(0);
-
-// 	PG_RETURN_BYTEA_P(network_send(addr, true));
-// }
-
-
-// Datum
-// inet_to_cidr(PG_FUNCTION_ARGS)
-// {
-// 	inet	   *src = PG_GETARG_INET_PP(0);
-// 	int			bits;
-
-// 	bits = ip_bits(src);
-
-// 	/* safety check */
-// 	if ((bits < 0) || (bits > ip_maxbits(src)))
-// 		elog(ERROR, "invalid inet bit length: %d", bits);
-
-// 	PG_RETURN_INET_P(cidr_set_masklen_internal(src, bits));
-// }
 
 // Datum
 // inet_set_masklen(PG_FUNCTION_ARGS)
@@ -337,45 +289,7 @@ inet_faure_out(PG_FUNCTION_ARGS)
 // 	PG_RETURN_INET_P(dst);
 // }
 
-// Datum
-// cidr_set_masklen(PG_FUNCTION_ARGS)
-// {
-// 	inet	   *src = PG_GETARG_INET_PP(0);
-// 	int			bits = PG_GETARG_INT32(1);
 
-// 	if (bits == -1)
-// 		bits = ip_maxbits(src);
-
-// 	if ((bits < 0) || (bits > ip_maxbits(src)))
-// 		ereport(ERROR,
-// 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-// 				 errmsg("invalid mask length: %d", bits)));
-
-// 	PG_RETURN_INET_P(cidr_set_masklen_internal(src, bits));
-// }
-
-// /*
-//  * Copy src and set mask length to 'bits' (which must be valid for the family)
-//  */
-// inet *
-// cidr_set_masklen_internal(const inet *src, int bits)
-// {
-// 	inet	   *dst = (inet *) palloc0(sizeof(inet));
-
-// 	ip_family(dst) = ip_family(src);
-// 	ip_bits(dst) = bits;
-
-// 	if (bits > 0)
-// 	{
-// 		Assert(bits <= ip_maxbits(dst));
-
-// 		/* Clone appropriate bytes of the address, leaving the rest 0 */
-// 		memcpy(ip_addr(dst), ip_addr(src), (bits + 7) / 8);
-
-// 		/* Clear any unwanted bits in the last partial byte */
-// 		if (bits % 8)
-// 			ip_addr(dst)[bits / 8] &= ~(0xFF >> (bits % 8));
-// 	}
 
 // 	/* Set varlena header correctly */
 // 	SET_INET_VARSIZE(dst);
@@ -394,34 +308,44 @@ inet_faure_out(PG_FUNCTION_ARGS)
 //  * otherwise logically-equal CIDRs might compare different.
 //  */
 
-// static int32
-// network_cmp_internal(inet *a1, inet *a2)
-// {
-// 	if (ip_family(a1) == ip_family(a2))
-// 	{
-// 		int			order;
+static int32
+network_cmp_internal(inet_faure *a1, inet_faure *a2)
+{
+    // TODO: Decide what to do in case of c-variables. Currently we return 2 and default to true whenever 2 is returned (to preserve tuples that contain c-vars). But this approach does not work if we have something like NOT (condition)
+    if (a1->inet_data.c_var != '0' || a2->inet_data.c_var != '0') {
+        return 2;
+    }
+	if (ip_family(a1) == ip_family(a2))
+	{
+		int			order;
 
-// 		order = bitncmp(ip_addr(a1), ip_addr(a2),
-// 						Min(ip_bits(a1), ip_bits(a2)));
-// 		if (order != 0)
-// 			return order;
-// 		order = ((int) ip_bits(a1)) - ((int) ip_bits(a2));
-// 		if (order != 0)
-// 			return order;
-// 		return bitncmp(ip_addr(a1), ip_addr(a2), ip_maxbits(a1));
-// 	}
+		order = bitncmp(ip_addr(a1), ip_addr(a2),
+						Min(ip_bits(a1), ip_bits(a2)));
+		if (order != 0)
+			return order;
+		order = ((int) ip_bits(a1)) - ((int) ip_bits(a2));
+		if (order != 0)
+			return order;
+		return bitncmp(ip_addr(a1), ip_addr(a2), ip_maxbits(a1));
+	}
 
-// 	return ip_family(a1) - ip_family(a2);
-// }
+	return ip_family(a1) - ip_family(a2);
+}
 
-// Datum
-// network_cmp(PG_FUNCTION_ARGS)
-// {
-// 	inet	   *a1 = PG_GETARG_INET_PP(0);
-// 	inet	   *a2 = PG_GETARG_INET_PP(1);
+PG_FUNCTION_INFO_V1(network_cmp);
 
-// 	PG_RETURN_INT32(network_cmp_internal(a1, a2));
-// }
+// FIXME: This function would not work correctly in case of c-variables. Need to think of a fix. Return 0 in case of c variables for now
+Datum
+network_cmp(PG_FUNCTION_ARGS)
+{
+	inet_faure	   *a1 = PG_GETARG_INET_PP(0);
+	inet_faure	   *a2 = PG_GETARG_INET_PP(1);
+    int32 return_val = network_cmp_internal(a1,a2);
+    if (return_val == 2) {
+        PG_RETURN_INT32(0);
+    }
+	PG_RETURN_INT32(return_val);
+}
 
 // /*
 //  * SortSupport strategy routine
@@ -796,62 +720,99 @@ inet_faure_out(PG_FUNCTION_ARGS)
 // 	return res;
 // }
 
-// /*
-//  *	Boolean ordering tests.
-//  */
-// Datum
-// network_lt(PG_FUNCTION_ARGS)
-// {
-// 	inet	   *a1 = PG_GETARG_INET_PP(0);
-// 	inet	   *a2 = PG_GETARG_INET_PP(1);
+/*
+ *	Boolean ordering tests.
+ */
+PG_FUNCTION_INFO_V1(network_lt);
 
-// 	PG_RETURN_BOOL(network_cmp_internal(a1, a2) < 0);
-// }
+Datum
+network_lt(PG_FUNCTION_ARGS)
+{
+	inet_faure	   *a1 = PG_GETARG_INET_PP(0);
+	inet_faure	   *a2 = PG_GETARG_INET_PP(1);
+    int32 return_val = network_cmp_internal(a1,a2);
+    if (return_val == 2) {
+        PG_RETURN_BOOL(true);
+    }
 
-// Datum
-// network_le(PG_FUNCTION_ARGS)
-// {
-// 	inet	   *a1 = PG_GETARG_INET_PP(0);
-// 	inet	   *a2 = PG_GETARG_INET_PP(1);
+	PG_RETURN_BOOL(return_val < 0);
+}
 
-// 	PG_RETURN_BOOL(network_cmp_internal(a1, a2) <= 0);
-// }
+PG_FUNCTION_INFO_V1(network_le);
 
-// Datum
-// network_eq(PG_FUNCTION_ARGS)
-// {
-// 	inet	   *a1 = PG_GETARG_INET_PP(0);
-// 	inet	   *a2 = PG_GETARG_INET_PP(1);
+Datum
+network_le(PG_FUNCTION_ARGS)
+{
+	inet_faure	   *a1 = PG_GETARG_INET_PP(0);
+	inet_faure	   *a2 = PG_GETARG_INET_PP(1);
 
-// 	PG_RETURN_BOOL(network_cmp_internal(a1, a2) == 0);
-// }
+    int32 return_val = network_cmp_internal(a1,a2);
+    if (return_val == 2) {
+        PG_RETURN_BOOL(true);
+    }
 
-// Datum
-// network_ge(PG_FUNCTION_ARGS)
-// {
-// 	inet	   *a1 = PG_GETARG_INET_PP(0);
-// 	inet	   *a2 = PG_GETARG_INET_PP(1);
+	PG_RETURN_BOOL(return_val <= 0);
+}
 
-// 	PG_RETURN_BOOL(network_cmp_internal(a1, a2) >= 0);
-// }
+PG_FUNCTION_INFO_V1(network_eq);
 
-// Datum
-// network_gt(PG_FUNCTION_ARGS)
-// {
-// 	inet	   *a1 = PG_GETARG_INET_PP(0);
-// 	inet	   *a2 = PG_GETARG_INET_PP(1);
+Datum
+network_eq(PG_FUNCTION_ARGS)
+{
+	inet_faure	   *a1 = PG_GETARG_INET_PP(0);
+	inet_faure	   *a2 = PG_GETARG_INET_PP(1);
+    int32 return_val = network_cmp_internal(a1,a2);
+    if (return_val == 2) {
+        PG_RETURN_BOOL(true);
+    }
 
-// 	PG_RETURN_BOOL(network_cmp_internal(a1, a2) > 0);
-// }
+	PG_RETURN_BOOL(return_val == 0);
+}
 
-// Datum
-// network_ne(PG_FUNCTION_ARGS)
-// {
-// 	inet	   *a1 = PG_GETARG_INET_PP(0);
-// 	inet	   *a2 = PG_GETARG_INET_PP(1);
+PG_FUNCTION_INFO_V1(network_ge);
 
-// 	PG_RETURN_BOOL(network_cmp_internal(a1, a2) != 0);
-// }
+Datum
+network_ge(PG_FUNCTION_ARGS)
+{
+	inet_faure	   *a1 = PG_GETARG_INET_PP(0);
+	inet_faure	   *a2 = PG_GETARG_INET_PP(1);
+    int32 return_val = network_cmp_internal(a1,a2);
+    if (return_val == 2) {
+        PG_RETURN_BOOL(true);
+    }
+
+	PG_RETURN_BOOL(return_val >= 0);
+}
+
+PG_FUNCTION_INFO_V1(network_gt);
+
+Datum
+network_gt(PG_FUNCTION_ARGS)
+{
+	inet_faure	   *a1 = PG_GETARG_INET_PP(0);
+	inet_faure	   *a2 = PG_GETARG_INET_PP(1);
+    int32 return_val = network_cmp_internal(a1,a2);
+    if (return_val == 2) {
+        PG_RETURN_BOOL(true);
+    }
+
+	PG_RETURN_BOOL(return_val > 0);
+}
+
+PG_FUNCTION_INFO_V1(network_ne);
+
+Datum
+network_ne(PG_FUNCTION_ARGS)
+{
+	inet_faure	   *a1 = PG_GETARG_INET_PP(0);
+	inet_faure	   *a2 = PG_GETARG_INET_PP(1);
+    int32 return_val = network_cmp_internal(a1,a2);
+    if (return_val == 2) {
+        PG_RETURN_BOOL(true);
+    }
+
+	PG_RETURN_BOOL(return_val != 0);
+}
 
 // /*
 //  * MIN/MAX support functions.

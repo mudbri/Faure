@@ -92,6 +92,7 @@ CREATE TABLE test_inet_faure (
 -- representation.
 
 INSERT INTO test_inet_faure VALUES ('192.168.100.1', '192.168.2.1');
+INSERT INTO test_inet_faure VALUES ('x', '192.168.2.1');
 -- INSERT INTO test_inet_faure VALUES ('192.168.100.2', '192.168.20.1');
 
 SELECT * FROM test_inet_faure;
