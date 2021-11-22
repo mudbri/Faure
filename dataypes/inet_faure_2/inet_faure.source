@@ -171,12 +171,12 @@ CREATE FUNCTION network_gt(inet_faure, inet_faure) RETURNS bool
 
 CREATE OPERATOR < (
    leftarg = inet_faure, rightarg = inet_faure, procedure = network_lt,
-   commutator = > , negator = >= ,
+   -- commutator = > , negator = >= ,
    restrict = scalarltsel, join = scalarltjoinsel
 );
 CREATE OPERATOR <= (
    leftarg = inet_faure, rightarg = inet_faure, procedure = network_le,
-   commutator = >= , negator = > ,
+   -- commutator = >= , negator = > ,
    restrict = scalarlesel, join = scalarlejoinsel
 );
 CREATE OPERATOR = (
@@ -188,12 +188,12 @@ CREATE OPERATOR = (
 );
 CREATE OPERATOR >= (
    leftarg = inet_faure, rightarg = inet_faure, procedure = network_ge,
-   commutator = <= , negator = < ,
+   -- commutator = <= , negator = < ,
    restrict = scalargesel, join = scalargejoinsel
 );
 CREATE OPERATOR > (
    leftarg = inet_faure, rightarg = inet_faure, procedure = network_gt,
-   commutator = < , negator = <= ,
+   -- commutator = < , negator = <= ,
    restrict = scalargtsel, join = scalargtjoinsel
 );
 
@@ -233,5 +233,5 @@ SELECT * from test_inet_faure where NOT (a = '192.168.100.0');
 
 
 -- clean up the example
--- DROP TABLE test_inet_faure;
--- DROP TYPE inet_faure CASCADE;
+DROP TABLE test_inet_faure;
+DROP TYPE inet_faure CASCADE;
