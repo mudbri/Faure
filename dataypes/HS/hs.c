@@ -1,57 +1,66 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
+#include "hs.h"
 
-// #define max(a,b) \
-//    ({ __typeof__ (a) _a = (a); \
-//        __typeof__ (b) _b = (b); \
-//      _a > _b ? _a : _b; })
+// Add a tvector to hs_list. Not doing header length checking for now
+void add_tvector_to_hs (hs *self, tvector value) {
+  add_to_vector(&self->hs_list, value);
+}
 
-typedef enum {
-    BIT_z = 0x0,
-    BIT_0 = 0x1,
-    BIT_1 = 0x2,
-    BIT_x = 0x3
-} tbit;
+// Add a headerspace to another headerspace. Not doing header length checking for now
+void add_hs_to_hs (hs *self, hs *value) {
+  // add to hs_list
+  for (int i = 0; i < value->hs_list.num_elems; i++) 
+    add_to_vector(&self->hs_list, value->hs_list.tvectors[i]);
 
-typedef long tvector; // This will represent a single header in binary i.e. 1x1z0, 1xxx01 etc)
 
-struct hs {
-   tvector* hs_list;
-   tvector* hs_diff;
-};
+  // add to hs_diff
+  for (int i = 0; i < value->hs_diff.num_elems; i++)
+    add_to_vector(&self->hs_diff, value->hs_diff.tvectors[i]);
+}
 
-tvector hs_string_to_byte_array(char* hs_string, int strlen) {
-    if (!hs_string || strlen == 0) {
-    	printf("ERROR: Empty or null string given\n");
-        return (BIT_z); // TODO: Add exception
-    }
-    tvector br = 0;
-    for (int i = 0; i < strlen; i++) {
-    	br = br << 2;
-        // substr = str[max(0,strlen-4*j-4):strlen-4*j]
-        if (hs_string[i] == 'X' || hs_string[i] == 'x')
-            br += 0x03;
-        else if (hs_string[i] == '1')
-            br += 0x02;
-        else if (hs_string[i] == '0')
-            br += 0x01;
-        else if (hs_string[i] == 'Z' || hs_string[i] == 'z')
-            br += 0x00;
-        else {
-	    	printf("ERROR: Unrecognized string given\n");
-	        return (BIT_z); // TODO: Add exception
-        }
-    }
-    return br;
+// hs initialize_empty_hs() {
+//   hs new_hs;
+//   new_hs.hs_list = emptyTVectorArray();
+//   new_hs.hs_diff = emptyTVectorArray();
+// }
+
+hs initialize_hs(char* hs_string) {
+  hs new_hs;
+  tvector tmp = hs_string_to_byte_array(hs_string);
+  new_hs.hs_list = initialize_tvector_array(tmp);
+  new_hs.hs_diff = emptyTVectorArray();
+  return new_hs;
+}
+
+void test_hs_string_converstions() {
+   tvector tmp = hs_string_to_byte_array("1xx01");
+   printf("%ld\n", tmp.byte_array);
+   char string[tmp.len+1];
+   printf("%d\n", tmp.len);
+   byte_array_to_hs_string(tmp,string);
+   printf("%s\n", string);
+}
+
+void test_hs_size() {
+   hs hs1 = initialize_hs("1xx01");
+   hs hs2 = initialize_hs("1x01xx");
+   add_hs_to_hs(&hs1, &hs2);
+   int size = size_hs_string(hs1);
+   printf("%d\n", size);
+}
+
+void test_hs_print() {
+   hs hs1 = initialize_hs("1xx01");
+   hs hs2 = initialize_hs("1x01xx");
+   add_hs_to_hs(&hs1, &hs2);
+   int size = size_hs_string(hs1);
+   char string[size];
+
+   to_string(hs1, string);
 }
 
 int main() {
-   // printf() displays the string inside quotation
-   tbit *value;
-   value = malloc(3 * sizeof(tbit));
-   value[0] = BIT_1;
-   printf("%d\n", hs_string_to_byte_array("1xx01",5));
+   // test_hs_string_converstions();
+   // test_hs_size();
+   test_hs_print();
    return 0;
 }
