@@ -91,8 +91,9 @@ CREATE TABLE test_inet_faure (
 -- data for user-defined types are just strings in the proper textual
 -- representation.
 
-INSERT INTO test_inet_faure VALUES ('225.242.0.0/24', '192.168.2.1');
+INSERT INTO test_inet_faure VALUES ('192.168.100.1', '192.168.2.1');
 INSERT INTO test_inet_faure VALUES ('x', '192.168.2.1');
+-- INSERT INTO test_inet_faure VALUES ('192.168.100.2', '192.168.20.1');
 
 SELECT * FROM test_inet_faure;
 
@@ -158,78 +159,73 @@ SELECT * FROM test_inet_faure;
 
 -- first, define the required operators
 
-CREATE FUNCTION network_lt(inet_faure, inet_faure) RETURNS bool
+-- CREATE FUNCTION inet_faure_abs_lt(inet_faure, inet_faure) RETURNS bool
+   -- AS '_OBJWD_/inet_faure' LANGUAGE C IMMUTABLE STRICT;
+-- CREATE FUNCTION inet_faure_abs_le(inet_faure, inet_faure) RETURNS bool
+   -- AS '_OBJWD_/inet_faure' LANGUAGE C IMMUTABLE STRICT;
+CREATE FUNCTION inet_faure_eq(inet_faure, inet_faure) RETURNS bool
    AS '_OBJWD_/inet_faure' LANGUAGE C IMMUTABLE STRICT;
-CREATE FUNCTION network_le(inet_faure, inet_faure) RETURNS bool
-   AS '_OBJWD_/inet_faure' LANGUAGE C IMMUTABLE STRICT;
-CREATE FUNCTION network_eq(inet_faure, inet_faure) RETURNS bool
-   AS '_OBJWD_/inet_faure' LANGUAGE C IMMUTABLE STRICT;
-CREATE FUNCTION network_ge(inet_faure, inet_faure) RETURNS bool
-   AS '_OBJWD_/inet_faure' LANGUAGE C IMMUTABLE STRICT;
-CREATE FUNCTION network_gt(inet_faure, inet_faure) RETURNS bool
-   AS '_OBJWD_/inet_faure' LANGUAGE C IMMUTABLE STRICT;
+-- CREATE FUNCTION inet_faure_abs_ge(inet_faure, inet_faure) RETURNS bool
+   -- AS '_OBJWD_/inet_faure' LANGUAGE C IMMUTABLE STRICT;
+-- CREATE FUNCTION inet_faure_abs_gt(inet_faure, inet_faure) RETURNS bool
+   -- AS '_OBJWD_/inet_faure' LANGUAGE C IMMUTABLE STRICT;
 
-CREATE OPERATOR < (
-   leftarg = inet_faure, rightarg = inet_faure, procedure = network_lt,
-   -- commutator = > , negator = >= ,
-   restrict = scalarltsel, join = scalarltjoinsel
-);
-CREATE OPERATOR <= (
-   leftarg = inet_faure, rightarg = inet_faure, procedure = network_le,
-   -- commutator = >= , negator = > ,
-   restrict = scalarlesel, join = scalarlejoinsel
-);
+-- CREATE OPERATOR < (
+--    leftarg = inet_faure, rightarg = inet_faure, procedure = inet_faure_abs_lt,
+--    commutator = > , negator = >= ,
+--    restrict = scalarltsel, join = scalarltjoinsel
+-- );
+-- CREATE OPERATOR <= (
+--    leftarg = inet_faure, rightarg = inet_faure, procedure = inet_faure_abs_le,
+--    commutator = >= , negator = > ,
+--    restrict = scalarlesel, join = scalarlejoinsel
+-- );
 CREATE OPERATOR = (
-   leftarg = inet_faure, rightarg = inet_faure, procedure = network_eq,
+   leftarg = inet_faure, rightarg = inet_faure, procedure = inet_faure_eq,
    commutator = = ,
    -- leave out negator since we didn't create <> operator
    -- negator = <> ,
    restrict = eqsel, join = eqjoinsel
 );
-CREATE OPERATOR >= (
-   leftarg = inet_faure, rightarg = inet_faure, procedure = network_ge,
-   -- commutator = <= , negator = < ,
-   restrict = scalargesel, join = scalargejoinsel
-);
-CREATE OPERATOR > (
-   leftarg = inet_faure, rightarg = inet_faure, procedure = network_gt,
-   -- commutator = < , negator = <= ,
-   restrict = scalargtsel, join = scalargtjoinsel
-);
+-- CREATE OPERATOR >= (
+--    leftarg = inet_faure, rightarg = inet_faure, procedure = inet_faure_abs_ge,
+--    commutator = <= , negator = < ,
+--    restrict = scalargesel, join = scalargejoinsel
+-- );
+-- CREATE OPERATOR > (
+--    leftarg = inet_faure, rightarg = inet_faure, procedure = inet_faure_abs_gt,
+--    commutator = < , negator = <= ,
+--    restrict = scalargtsel, join = scalargtjoinsel
+-- );
 
 -- create the support function too
-CREATE FUNCTION network_cmp(inet_faure, inet_faure) RETURNS int4
+CREATE FUNCTION inet_faure_cmp(inet_faure, inet_faure) RETURNS int4
    AS '_OBJWD_/inet_faure' LANGUAGE C IMMUTABLE STRICT;
 
 -- now we can make the operator class
 
-CREATE OPERATOR CLASS inet_faure_abs_ops
-    DEFAULT FOR TYPE inet_faure USING btree AS
-        OPERATOR        1       < ,
-        OPERATOR        2       <= ,
-        OPERATOR        3       = ,
-        OPERATOR        4       >= ,
-        OPERATOR        5       > ,
-        FUNCTION        1       network_cmp(inet_faure, inet_faure);
+-- CREATE OPERATOR CLASS inet_faure_abs_ops
+--     DEFAULT FOR TYPE inet_faure USING btree AS
+--         OPERATOR        1       < ,
+--         OPERATOR        2       <= ,
+--         OPERATOR        3       = ,
+--         OPERATOR        4       >= ,
+--         OPERATOR        5       > ,
+--         FUNCTION        1       inet_faure_abs_cmp(inet_faure, inet_faure);
 
 
 -- now, we can define a btree index on inet_faure types. First, let's populate
 -- the table. Note that postgres needs many more tuples to start using the
 -- btree index during selects.
-INSERT INTO test_inet_faure VALUES ('192.168.100.1', '192.168.100.1');
-INSERT INTO test_inet_faure VALUES ('y', 'x');
+-- INSERT INTO test_inet_faure VALUES ('(56.0,-22.5)', '(-43.2,-0.07)');
+-- INSERT INTO test_inet_faure VALUES ('(-91.9,33.6)', '(8.6,3.0)');
 
 -- CREATE INDEX test_cplx_ind ON test_inet_faure
 --    USING btree(a inet_faure_abs_ops);
 
-SELECT * from test_inet_faure where a = '192.168.100.1';
-SELECT * from test_inet_faure where a = '192.168.100.2';
-SELECT * from test_inet_faure where a < '192.168.100.20';
-SELECT * from test_inet_faure where a < '192.168.99.20';
-SELECT * from test_inet_faure where a > '192.168.99.20';
-SELECT * from test_inet_faure where a > '192.168.100.0';
-SELECT * from test_inet_faure where a > '192.168.100.0';
-SELECT * from test_inet_faure where NOT (a = '192.168.100.0');
+-- SELECT * from test_inet_faure where a = '(56.0,-22.5)';
+-- SELECT * from test_inet_faure where a < '(56.0,-22.5)';
+-- SELECT * from test_inet_faure where a > '(56.0,-22.5)';
 
 
 -- clean up the example
